@@ -76,6 +76,13 @@ namespace wi::scene
 		virtual void Update(float dt) {}   // called every frame while dt > 0
 		virtual void Destroy() {}          // called once when removed / entity removed / scene cleared
 
+		// Debug/inspector UI (override in your subclass): draw ImGui widgets bound to this
+		//	instance's live members. Called by the scene debug UI (see imnativecomponents.h)
+		//	while an ImGui window is already active — do NOT Begin()/End() here. Editing a member
+		//	takes effect on the next Update(); it is NOT written back to metadata (not persisted).
+		//	The base does nothing so components are debug-able only if they opt in.
+		virtual void DrawDebug() {}
+
 		// Parameter access. Reads NCA_<localID>_<name> from the entity's MetadataComponent.
 		bool        GetBool(const std::string& name, bool def = false) const;
 		int         GetInt(const std::string& name, int def = 0) const;
