@@ -92,6 +92,29 @@ namespace wi::scene
 			m->float_values.has(key) || m->string_values.has(key);
 	}
 
+	// Enabled flag: metadata NCE_<localID> (bool), default true when absent.
+	static std::string EnableKey(const NativeComponent* self)
+	{
+		return "NCE_" + std::to_string(self->localID);
+	}
+	bool NativeComponent::IsEnabled() const
+	{
+		const MetadataComponent* m = GetMetadata(this);
+		if (m == nullptr)
+			return true; // no metadata -> enabled by default
+		const std::string key = EnableKey(this);
+		return m->bool_values.has(key) ? m->bool_values.get(key) : true;
+	}
+	void NativeComponent::SetEnabled(bool value)
+	{
+		if (scene == nullptr)
+			return;
+		MetadataComponent* m = scene->metadatas.GetComponent(entity);
+		if (m == nullptr)
+			return;
+		m->bool_values.set(EnableKey(this), value);
+	}
+
 	// ------------------------------------------------------------------
 	// NativeComponentManager
 	// ------------------------------------------------------------------
@@ -120,7 +143,11 @@ namespace wi::scene
 				if (!keep)
 				{
 					if (inst.component)
+					{
+						if (inst.enabled)
+							inst.component->OnDisable();
 						inst.component->Destroy();
+					}
 					list.erase(list.begin() + i);
 				}
 			}
@@ -194,8 +221,24 @@ namespace wi::scene
 			}
 		}
 
-		// --- Pass C: Start() newly created instances, Update(dt) all of them ---
+		// --- Pass C: drive the lifecycle (Awake -> enable edges -> Start -> FixedUpdate -> Update) ---
 		//	Single-threaded on purpose: user code may freely touch the scene.
+
+		// Advance the shared fixed-step accumulator once per frame, clamped to avoid the
+		// "spiral of death" when a frame hitch dumps a large dt.
+		int fixedSteps = 0;
+		if (dt > 0)
+		{
+			fixedAccumulator += dt;
+			while (fixedAccumulator >= FIXED_DT && fixedSteps < MAX_FIXED_STEPS)
+			{
+				fixedAccumulator -= FIXED_DT;
+				++fixedSteps;
+			}
+			if (fixedAccumulator > FIXED_DT * MAX_FIXED_STEPS)
+				fixedAccumulator = 0.0f; // drop backlog beyond the clamp
+		}
+
 		for (auto& pair : instances)
 		{
 			wi::vector<NativeComponentManager::Instance>& list = pair.second;
@@ -203,13 +246,43 @@ namespace wi::scene
 			{
 				if (!inst.component)
 					continue;
+				NativeComponent* c = inst.component.get();
+
+				// Awake: once, before anything else, regardless of enabled state.
+				if (!inst.awoken)
+				{
+					c->Awake();
+					inst.awoken = true;
+				}
+
+				// Enable/disable edges from metadata (NCE_<id>, default true).
+				const bool desired = c->IsEnabled();
+				if (desired && !inst.enabled)
+				{
+					inst.enabled = true;
+					c->OnEnable();
+				}
+				else if (!desired && inst.enabled)
+				{
+					inst.enabled = false;
+					c->OnDisable();
+				}
+
+				if (!inst.enabled)
+					continue; // disabled: skip Start / FixedUpdate / Update
+
+				// Start: once, before the first Update, only while enabled.
 				if (!inst.started)
 				{
-					inst.component->Start();
+					c->Start();
 					inst.started = true;
 				}
+
+				for (int s = 0; s < fixedSteps; ++s)
+					c->FixedUpdate(FIXED_DT);
+
 				if (dt > 0)
-					inst.component->Update(dt);
+					c->Update(dt);
 			}
 		}
 
@@ -224,7 +297,11 @@ namespace wi::scene
 		for (NativeComponentManager::Instance& inst : it->second)
 		{
 			if (inst.component)
+			{
+				if (inst.enabled)
+					inst.component->OnDisable();
 				inst.component->Destroy();
+			}
 		}
 		instances.erase(it);
 	}
@@ -236,7 +313,11 @@ namespace wi::scene
 			for (NativeComponentManager::Instance& inst : pair.second)
 			{
 				if (inst.component)
+				{
+					if (inst.enabled)
+						inst.component->OnDisable();
 					inst.component->Destroy();
+				}
 			}
 		}
 		instances.clear();

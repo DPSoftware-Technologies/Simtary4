@@ -71,10 +71,35 @@ namespace wi::scene
 		NativeComponent() = default;
 		virtual ~NativeComponent() = default;
 
-		// Lifecycle (override in your subclass):
-		virtual void Start() {}            // called once, the first time the component is seen
-		virtual void Update(float dt) {}   // called every frame while dt > 0
-		virtual void Destroy() {}          // called once when removed / entity removed / scene cleared
+		// Lifecycle (override in your subclass). Call order on an entity, per instance:
+		//	Awake -> OnEnable -> Start -> (FixedUpdate* , Update) every frame -> OnDisable -> Destroy
+		//
+		//	Awake       : once, the first frame the instance exists, BEFORE OnEnable/Start, and
+		//	              regardless of the enabled flag (use for self-setup independent of others).
+		//	OnEnable    : each time the instance transitions disabled -> enabled (incl. the first
+		//	              time it is seen while enabled). Fires right after Awake on first enable.
+		//	Start       : once, before the first Update, only while enabled. A disabled instance
+		//	              defers Start until it is first enabled.
+		//	FixedUpdate : zero or more times per frame on a fixed timestep (see FIXED_DT), only
+		//	              while enabled. Use for physics-style stepping independent of frame rate.
+		//	Update      : every frame while enabled and dt > 0.
+		//	OnDisable   : each time the instance transitions enabled -> disabled (and once before
+		//	              Destroy if it was still enabled).
+		//	Destroy     : once when removed / entity removed / scene cleared.
+		virtual void Awake() {}
+		virtual void OnEnable() {}
+		virtual void Start() {}
+		virtual void FixedUpdate(float fixedDt) {}
+		virtual void Update(float dt) {}
+		virtual void OnDisable() {}
+		virtual void Destroy() {}
+
+		// Enabled flag, backed by metadata NCE_<localID> (bool, default true when the key is
+		//	absent). Reading is the source of truth each frame; toggling fires OnEnable/OnDisable
+		//	on the next Update and gates Start/FixedUpdate/Update. SetEnabled writes the metadata
+		//	so the change persists (editable in the Wicked Editor and saved with the scene).
+		bool IsEnabled() const;
+		void SetEnabled(bool value);
 
 		// Debug/inspector UI (override in your subclass): draw ImGui widgets bound to this
 		//	instance's live members. Called by the scene debug UI (see imnativecomponents.h)
@@ -140,9 +165,16 @@ namespace wi::scene
 			NativeTypeID typeID = nullptr;
 			int localID = 0;
 			std::string name;
-			bool started = false;
+			bool awoken = false;   // Awake() fired
+			bool started = false;  // Start() fired
+			bool enabled = false;  // last-applied enabled state (drives OnEnable/OnDisable edges)
 		};
 		wi::unordered_map<wi::ecs::Entity, wi::vector<Instance>> instances; // entity -> attached instances
+
+		// Fixed-timestep state for FixedUpdate (shared across all instances, like Unity).
+		static constexpr float FIXED_DT = 1.0f / 60.0f;   // 60 Hz fixed step
+		static constexpr int   MAX_FIXED_STEPS = 8;       // clamp to avoid the spiral of death
+		float fixedAccumulator = 0.0f;
 
 		// Reconcile attachments against metadata, fire Start() on new ones and Update(dt) on all.
 		//	Called by Scene::RunNativeComponentUpdateSystem once per frame.
