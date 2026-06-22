@@ -115,6 +115,19 @@ namespace wi::scene
 		std::string GetString(const std::string& name, const std::string& def = "") const;
 		bool        HasParam(const std::string& name) const;
 
+		// Entity-reference parameter ("drag an object into a field", Unity-style).
+		//	Stored as a STRING arg NCA_<localID>_<name> whose value is the target entity's
+		//	stable GUID (see EnsureEntityGUID). String storage keeps it editable in the Wicked
+		//	Editor; the GUID (not the name) makes it survive renames and duplicate names.
+		//
+		//	GetEntityRef : resolve the stored GUID to a live Entity (INVALID_ENTITY if unset /
+		//	               the target is gone). Cheap-ish (scans metadata) — cache the result.
+		//	SetEntityRef : point the field at 'target'; ensures the target has a GUID and writes
+		//	               the GUID into this instance's metadata arg (persisted, editor-visible).
+		//	               Pass INVALID_ENTITY to clear the field.
+		wi::ecs::Entity GetEntityRef(const std::string& name) const;
+		void            SetEntityRef(const std::string& name, wi::ecs::Entity target);
+
 		// One-line binding of a member field to a parameter (type deduced from the field):
 		//	Bind(speed, "Args3");  // same as: speed = GetFloat("Args3", speed);
 		template<typename T>
@@ -154,6 +167,25 @@ namespace wi::scene
 	void RegisterNativeComponent(const std::string& name, NativeComponentFactory factory, NativeTypeID typeID);
 	// Look up a registration by the metadata name (returns nullptr if not registered).
 	const NativeComponentRegistration* FindNativeComponentRegistration(const std::string& name);
+
+	// ------------------------------------------------------------------
+	// Stable entity references (GUID-based).
+	//	Engine entity IDs are session-local and names are mutable / non-unique, so neither is a
+	//	safe persistent reference. These store a stable per-entity GUID in the entity's own
+	//	MetadataComponent under the string key "EntityGUID" (editor-visible, saved with the scene).
+	//
+	//	EnsureEntityGUID : return the entity's GUID, creating (and storing) one if absent. Creates
+	//	                   a MetadataComponent on the entity if it has none. GUIDs are unique within
+	//	                   the scene (allocated as max-existing + 1). Returns "" only if entity is
+	//	                   INVALID_ENTITY.
+	//	FindEntityByGUID : reverse lookup, INVALID_ENTITY if no entity carries that GUID.
+	//
+	//	NOTE: Scene::Entity_Duplicate copies the GUID onto the clone -> a collision. Re-stamp the
+	//	clone after duplicating if you need both addressable (see RegenerateEntityGUID).
+	std::string     EnsureEntityGUID(Scene& scene, wi::ecs::Entity e);
+	wi::ecs::Entity FindEntityByGUID(Scene& scene, const std::string& guid);
+	// Force-assign a fresh unique GUID (use on a duplicated entity to break the inherited collision).
+	std::string     RegenerateEntityGUID(Scene& scene, wi::ecs::Entity e);
 
 	// Per-scene runtime state for native components.
 	//	This is NOT serialized: attachments are rebuilt from the (serialized) MetadataComponent every Update.

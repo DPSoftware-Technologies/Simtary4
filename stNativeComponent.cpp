@@ -4,6 +4,7 @@
 #include "wiProfiler.h"
 
 #include <cstdlib>
+#include <cstdio>
 
 using namespace wi::ecs;
 
@@ -90,6 +91,97 @@ namespace wi::scene
 		const std::string key = ArgKey(this, name);
 		return m->bool_values.has(key) || m->int_values.has(key) ||
 			m->float_values.has(key) || m->string_values.has(key);
+	}
+
+	// ------------------------------------------------------------------
+	// Stable entity references (GUID-based)
+	// ------------------------------------------------------------------
+	static const std::string kEntityGUIDKey = "EntityGUID";
+
+	std::string EnsureEntityGUID(Scene& scene, Entity e)
+	{
+		if (e == INVALID_ENTITY)
+			return std::string();
+
+		MetadataComponent* m = scene.metadatas.GetComponent(e);
+		if (m == nullptr)
+			m = &scene.metadatas.Create(e); // referencing implies "addressable" -> give it metadata
+
+		if (m->string_values.has(kEntityGUIDKey))
+		{
+			const std::string existing = m->string_values.get(kEntityGUIDKey);
+			if (!existing.empty())
+				return existing;
+		}
+
+		// Allocate a scene-unique id as (max existing GUID) + 1, stored as hex.
+		uint64_t maxv = 0;
+		for (size_t i = 0; i < scene.metadatas.GetCount(); ++i)
+		{
+			const MetadataComponent& md = scene.metadatas[i];
+			if (md.string_values.has(kEntityGUIDKey))
+			{
+				const uint64_t v = std::strtoull(md.string_values.get(kEntityGUIDKey).c_str(), nullptr, 16);
+				if (v > maxv)
+					maxv = v;
+			}
+		}
+		char buf[24];
+		std::snprintf(buf, sizeof(buf), "%llx", (unsigned long long)(maxv + 1));
+		const std::string guid = buf;
+		m->string_values.set(kEntityGUIDKey, guid);
+		return guid;
+	}
+
+	Entity FindEntityByGUID(Scene& scene, const std::string& guid)
+	{
+		if (guid.empty())
+			return INVALID_ENTITY;
+		for (size_t i = 0; i < scene.metadatas.GetCount(); ++i)
+		{
+			const MetadataComponent& md = scene.metadatas[i];
+			if (md.string_values.has(kEntityGUIDKey) && md.string_values.get(kEntityGUIDKey) == guid)
+				return scene.metadatas.GetEntity(i);
+		}
+		return INVALID_ENTITY;
+	}
+
+	std::string RegenerateEntityGUID(Scene& scene, Entity e)
+	{
+		if (e == INVALID_ENTITY)
+			return std::string();
+		MetadataComponent* m = scene.metadatas.GetComponent(e);
+		if (m == nullptr)
+			m = &scene.metadatas.Create(e);
+		m->string_values.erase(kEntityGUIDKey); // drop inherited/duplicate id, then mint a fresh one
+		return EnsureEntityGUID(scene, e);
+	}
+
+	Entity NativeComponent::GetEntityRef(const std::string& name) const
+	{
+		if (scene == nullptr)
+			return INVALID_ENTITY;
+		const std::string guid = GetString(name, "");
+		if (guid.empty())
+			return INVALID_ENTITY;
+		return FindEntityByGUID(*scene, guid);
+	}
+
+	void NativeComponent::SetEntityRef(const std::string& name, Entity target)
+	{
+		if (scene == nullptr)
+			return;
+		MetadataComponent* m = scene->metadatas.GetComponent(entity);
+		if (m == nullptr)
+			m = &scene->metadatas.Create(entity);
+		const std::string key = ArgKey(this, name);
+		if (target == INVALID_ENTITY)
+		{
+			m->string_values.set(key, ""); // clear the field (keep the key so the editor still shows it)
+			return;
+		}
+		const std::string guid = EnsureEntityGUID(*scene, target);
+		m->string_values.set(key, guid);
 	}
 
 	// Enabled flag: metadata NCE_<localID> (bool), default true when absent.
