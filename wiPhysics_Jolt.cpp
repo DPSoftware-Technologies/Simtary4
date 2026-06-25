@@ -3243,6 +3243,8 @@ namespace wi::physics
 			physicsobject.character->SetLinearVelocity(cast(velocity));
 			return;
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		body_interface.SetLinearVelocity(physicsobject.bodyID, cast(velocity));
@@ -3260,6 +3262,8 @@ namespace wi::physics
 			physicsobject.character->SetLinearAndAngularVelocity(physicsobject.character->GetLinearVelocity(), cast(velocity));
 			return;
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		body_interface.SetAngularVelocity(physicsobject.bodyID, cast(velocity));
@@ -3274,6 +3278,8 @@ namespace wi::physics
 		{
 			return cast(physicsobject.character->GetLinearVelocity());
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return XMFLOAT3(0, 0, 0); // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		return cast(body_interface.GetLinearVelocity(physicsobject.bodyID));
@@ -3287,6 +3293,8 @@ namespace wi::physics
 		{
 			return cast(physicsobject.character->GetPosition());
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return XMFLOAT3(0, 0, 0); // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		return cast(body_interface.GetPosition(physicsobject.bodyID));
@@ -3300,6 +3308,8 @@ namespace wi::physics
 		{
 			return cast(physicsobject.character->GetRotation());
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return XMFLOAT4(0, 0, 0, 1); // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		return cast(body_interface.GetRotation(physicsobject.bodyID));
@@ -3453,6 +3463,8 @@ namespace wi::physics
 		if (physicscomponent.physicsobject == nullptr)
 			return;
 		RigidBody& physicsobject = GetRigidBody(physicscomponent);
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		body_interface.AddForce(physicsobject.bodyID, cast(force));
@@ -3467,6 +3479,8 @@ namespace wi::physics
 		if (physicscomponent.physicsobject == nullptr)
 			return;
 		RigidBody& physicsobject = GetRigidBody(physicscomponent);
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		Vec3 at_world = at_local ? body_interface.GetCenterOfMassTransform(physicsobject.bodyID).Inversed() * cast(at) : cast(at);
@@ -3486,6 +3500,8 @@ namespace wi::physics
 			physicsobject.character->AddImpulse(cast(impulse));
 			return;
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		body_interface.AddImpulse(physicsobject.bodyID, cast(impulse));
@@ -3566,6 +3582,8 @@ namespace wi::physics
 			physicsobject.character->AddImpulse(cast(impulse));
 			return;
 		}
+		if (physicsobject.bodyID.IsInvalid())
+			return; // body not built yet (or creation failed) - avoid indexing Jolt with an invalid BodyID
 		PhysicsScene& physics_scene = *(PhysicsScene*)physicsobject.physics_scene.get();
 		BodyInterface& body_interface = physics_scene.physics_system.GetBodyInterfaceNoLock();
 		Vec3 at_world = at_local ? body_interface.GetCenterOfMassTransform(physicsobject.bodyID) * cast(at) : cast(at);
